@@ -2,6 +2,7 @@ package flexmy
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"git.eaciitapp.com/sebar/dbflex"
@@ -56,7 +57,7 @@ func (q *Query) Execute(in toolkit.M) (interface{}, error) {
 		return nil, toolkit.Errorf("Operation is unknown. current operation is %s", cmdtype)
 	}
 	cmdtxt := q.Config(dbflex.ConfigKeyCommand, "").(string)
-	if cmdtxt == "" {
+	if cmdtxt == "" && cmdtype != dbflex.QuerySave {
 		return nil, toolkit.Errorf("No command")
 	}
 
@@ -90,6 +91,30 @@ func (q *Query) Execute(in toolkit.M) (interface{}, error) {
 	}
 
 	switch cmdtype {
+	case dbflex.QuerySave:
+		tableName := q.Config(dbflex.ConfigKeyTableName, "").(string)
+		filter := q.Config(dbflex.ConfigKeyFilter, nil)
+		if filter == nil {
+			return nil, fmt.Errorf("save operations should have filter")
+		}
+
+		cmdGets := dbflex.From(tableName).Where(filter.(*dbflex.Filter)).Select()
+		cursor := q.Connection().Cursor(cmdGets, nil)
+		if err := cursor.Error(); err != nil {
+			return nil, fmt.Errorf("unable to get data for checking. %s", err.Error())
+		}
+
+		//fmt.Println("Filter:", toolkit.JsonString(filter))
+		var saveCmd dbflex.ICommand
+		if cursor.Count() == 0 {
+			saveCmd = dbflex.From(tableName).Where(filter.(*dbflex.Filter)).Insert()
+		} else {
+			saveCmd = dbflex.From(tableName).Where(filter.(*dbflex.Filter)).Update()
+		}
+		cursor.Close()
+
+		return q.Connection().Execute(saveCmd, in)
+
 	case dbflex.QueryInsert:
 		cmdtxt = strings.Replace(cmdtxt, "{{.FIELDS}}", strings.Join(sqlfieldnames, ","), -1)
 		cmdtxt = strings.Replace(cmdtxt, "{{.VALUES}}", strings.Join(sqlvalues, ","), -1)

@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	connTxt = "root:Database.1@/ectestdb"
+	connTxt = "root:Database.1@/testdb"
 )
 
 func clasicConnect() (*sql.DB, error) {
